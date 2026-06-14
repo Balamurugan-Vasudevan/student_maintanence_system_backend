@@ -1,19 +1,22 @@
-from fastapi        import HTTPException, status
-from passlib.context import CryptContext
-from jose           import jwt
-from datetime       import datetime, timedelta
-from bson           import ObjectId
-from app.config     import settings
-from app.database   import get_db
+from fastapi      import HTTPException, status
+from jose         import jwt
+from datetime     import datetime, timedelta
+from bson         import ObjectId
+from app.config   import settings
+from app.database import get_db
 from app.schemas.user import RegisterSchema, LoginSchema
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    pwd_bytes = password.encode('utf-8')
+    salt      = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(
+        plain.encode('utf-8'),
+        hashed.encode('utf-8')
+    )
 
 def create_token(user_id: str) -> str:
     expire  = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
@@ -23,7 +26,6 @@ def create_token(user_id: str) -> str:
 async def register_user(data: RegisterSchema):
     db = get_db()
 
-    # check duplicate email
     existing = await db["users"].find_one({"email": data.email})
     if existing:
         raise HTTPException(
@@ -71,3 +73,4 @@ async def get_me(current_user: dict):
         "name":  current_user["name"],
         "email": current_user["email"],
     }
+
